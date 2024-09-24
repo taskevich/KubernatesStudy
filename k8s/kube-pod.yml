@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-kube-pod
+  labels:
+    component: backend
+spec:
+  containers:
+    - name: backend-kube
+      image: python:3.11.1
+      ports:
+        - containerPort: 8000
