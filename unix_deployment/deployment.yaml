@@ -15,43 +15,31 @@ spec:
       containers:
         - name: ubuntu
           image: unix-deployment:1.0
-          command: [ "/usr/sbin/sshd","-D" ]
           stdin: true
           tty: true
           securityContext:
             runAsUser: 0
             runAsGroup: 1001
+          env:
+            - name: ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: unix-secrets
+                  key: root-password
+            - name: TASK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: unix-secrets
+                  key: task-password
           volumeMounts:
             - name: logs
               mountPath: /logs
           ports:
             - containerPort: 22
               name: ssh
-
-        - name: net-sidecar
-          image: busybox
-          command: [ "sh", "-c", "\
-              mkdir -p /logs/net && \
-              while true; do \
-                  netstat -tunp >> /logs/net/net_$(date +%Y%m%d_%H%M%S).log 2>/dev/null || true; \
-                  sleep 30; \
-              done" ]
-          volumeMounts:
-            - name: logs
-              mountPath: /logs
-
-        # HTTP-сервер для логов
-        - name: http-logs
-          image: python:3
-          command: [ "python", "-m", "http.server", "3000", "--directory", "/logs" ]
-          volumeMounts:
-            - name: logs
-              mountPath: /logs
-
       volumes:
         - name: logs
           emptyDir: { }
-
 ---
 apiVersion: v1
 kind: Service
@@ -67,15 +55,10 @@ spec:
   type: LoadBalancer
 ---
 apiVersion: v1
-kind: Service
+kind: Secret
 metadata:
-  name: unix-logs-service
-spec:
-  selector:
-    app: unix
-  ports:
-    - protocol: TCP
-      port: 3000
-      targetPort: 3000
-      nodePort: 30081
-  type: LoadBalancer
+  name: unix-secrets
+type: Opaque
+data:
+  root-password: ZnNvY2lldHk=
+  task-password: ZnNvY2lldHk=
