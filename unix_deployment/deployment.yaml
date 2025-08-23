@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unix-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unix
+  template:
+    metadata:
+      labels:
+        app: unix
+    spec:
+      containers:
+        - name: ubuntu
+          image: unix-deployment:1.0
+          command: [ "/usr/sbin/sshd","-D" ]
+          stdin: true
+          tty: true
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 1001
+          volumeMounts:
+            - name: logs
+              mountPath: /logs
+          ports:
+            - containerPort: 22
+              name: ssh
+
+        - name: net-sidecar
+          image: busybox
+          command: [ "sh", "-c", "\
+              mkdir -p /logs/net && \
+              while true; do \
+                  netstat -tunp >> /logs/net/net_$(date +%Y%m%d_%H%M%S).log 2>/dev/null || true; \
+                  sleep 30; \
+              done" ]
+          volumeMounts:
+            - name: logs
+              mountPath: /logs
+
+        # HTTP-сервер для логов
+        - name: http-logs
+          image: python:3
+          command: [ "python", "-m", "http.server", "3000", "--directory", "/logs" ]
+          volumeMounts:
+            - name: logs
+              mountPath: /logs
+
+      volumes:
+        - name: logs
+          emptyDir: { }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unix-ssh-service
+spec:
+  selector:
+    app: unix
+  ports:
+    - port: 22
+      targetPort: 22
+      nodePort: 32000
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unix-logs-service
+spec:
+  selector:
+    app: unix
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      nodePort: 30081
+  type: LoadBalancer
